@@ -3,13 +3,13 @@ module github.com/Montelibero/mlm
 go 1.23.2
 
 require (
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/samber/lo v1.47.0
 	github.com/stellar/go v0.0.0-20241105223651-39a8d368086a
 	github.com/stretchr/testify v1.9.0
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-chi/chi v4.1.2+incompatible // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
