@@ -18,6 +18,8 @@ const (
 	MTLAPAsset        = "MTLAP"
 	MTLAPIssuer       = "GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA"
 	MTLAPAssetRequest = "MTLAP:GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA"
+	EURMTLAsset       = "EURMTL"
+	EURMTLIssuer      = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 	TagRecommend      = "RecommendToMTLA"
 )
 
@@ -25,7 +27,18 @@ type Client struct {
 	cl mlm.HorizonClient
 }
 
-func (c *Client) Fetch(ctx context.Context) (*mlm.RecommenderFetchResult, error) {
+func (c *Client) Balance(ctx context.Context, accountID, asset, issuer string) (string, error) {
+	acc, err := c.cl.AccountDetail(horizonclient.AccountRequest{
+		AccountID: accountID,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return acc.GetCreditBalance(asset, issuer), nil
+}
+
+func (c *Client) Recommenders(ctx context.Context) (*mlm.RecommendersFetchResult, error) {
 	var allAccounts []horizon.Account
 	accp, err := c.cl.Accounts(horizonclient.AccountsRequest{
 		Asset: MTLAPAssetRequest,
@@ -56,8 +69,8 @@ func NewClient(cl horizonclient.ClientInterface) *Client {
 	return &Client{cl: cl}
 }
 
-func accountsToResult(accs []horizon.Account) *mlm.RecommenderFetchResult {
-	res := &mlm.RecommenderFetchResult{}
+func accountsToResult(accs []horizon.Account) *mlm.RecommendersFetchResult {
+	res := &mlm.RecommendersFetchResult{}
 
 	accMap := lo.Associate(accs, func(acc horizon.Account) (string, horizon.Account) {
 		return acc.AccountID, acc
@@ -104,4 +117,4 @@ func accountsToResult(accs []horizon.Account) *mlm.RecommenderFetchResult {
 	return res
 }
 
-var _ mlm.RecommenderFetcher = &Client{}
+var _ mlm.StellarAgregator = &Client{}
