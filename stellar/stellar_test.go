@@ -9,11 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClient_Balance(t *testing.T) {
+	ctx := context.Background()
+	cl := stellar.NewClient(horizonclient.DefaultPublicNetClient) // TODO: use mock
+
+	balance, err := cl.Balance(ctx, stellar.MTLAPIssuer, stellar.MTLAPAsset, stellar.MTLAPIssuer)
+	require.NoError(t, err)
+	require.NotEmpty(t, balance)
+}
+
 func TestClient_Fetch(t *testing.T) {
 	ctx := context.Background()
 	cl := stellar.NewClient(horizonclient.DefaultPublicNetClient) // TODO: use mock
 
-	res, err := cl.Fetch(ctx)
+	res, err := cl.Recommenders(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, res)
 	require.NotEmpty(t, res.Recommenders)

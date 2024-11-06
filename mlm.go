@@ -16,20 +16,28 @@ type Recommender struct {
 	Recommended []Recommended
 }
 
-type RecommenderFetchResult struct {
+type RecommendersFetchResult struct {
 	Recommenders          []Recommender
 	TotalRecommendedMTLAP int
 }
 
-type RecommenderFetcher interface {
-	Fetch(ctx context.Context) (*RecommenderFetchResult, error)
+type StellarAgregator interface {
+	Balance(ctx context.Context, accountID, asset, issuer string) (string, error)
+	Recommenders(ctx context.Context) (*RecommendersFetchResult, error)
 }
 
 type HorizonClient interface {
 	horizonclient.ClientInterface
 }
 
-type DistributeResult struct{}
+type Distribute struct {
+	AccountID string
+	Amount    float64
+}
+
+type DistributeResult struct {
+	Distributes []Distribute
+}
 
 type Distributor interface {
 	Distribute(ctx context.Context) (*DistributeResult, error)
