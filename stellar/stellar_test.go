@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Montelibero/mlm/stellar"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stretchr/testify/require"
 )
@@ -27,4 +28,7 @@ func TestClient_Fetch(t *testing.T) {
 	require.NotEmpty(t, res)
 	require.NotEmpty(t, res.Recommenders)
 	require.NotEmpty(t, res.TotalRecommendedMTLAP)
+	require.NotEmpty(t, res.Conflict)
+
+	spew.Dump(res.Conflict)
 }

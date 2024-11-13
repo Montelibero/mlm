@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Montelibero/mlm"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/samber/lo"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
@@ -21,6 +20,10 @@ const (
 	EURMTLAsset       = "EURMTL"
 	EURMTLIssuer      = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 	TagRecommend      = "RecommendToMTLA"
+)
+
+const (
+	minMTLAPApplicableRecommender = 4
 )
 
 type Client struct {
@@ -65,12 +68,22 @@ func (c *Client) Recommenders(ctx context.Context) (*mlm.RecommendersFetchResult
 	return accountsToResult(allAccounts), nil
 }
 
+func (c *Client) AccountDetail(accountID string) (horizon.Account, error) {
+	return c.cl.AccountDetail(horizonclient.AccountRequest{
+		AccountID: accountID,
+	})
+}
+
 func NewClient(cl horizonclient.ClientInterface) *Client {
 	return &Client{cl: cl}
 }
 
 func accountsToResult(accs []horizon.Account) *mlm.RecommendersFetchResult {
-	res := &mlm.RecommendersFetchResult{}
+	res := &mlm.RecommendersFetchResult{
+		Conflict: make(map[string][]string),
+	}
+	uniqueRecommendeds := make(map[string]struct{})
+	lastRecommendedRecommenders := make(map[string]string)
 
 	accMap := lo.Associate(accs, func(acc horizon.Account) (string, horizon.Account) {
 		return acc.AccountID, acc
@@ -81,31 +94,40 @@ func accountsToResult(accs []horizon.Account) *mlm.RecommendersFetchResult {
 			return strings.HasPrefix(k, TagRecommend)
 		})
 
-		if len(recommendedDataMap) == 0 {
+		if len(recommendedDataMap) == 0 { // if no recommendeds
+			continue
+		}
+
+		if !isRecommenderApplicable(recommender) { // if recommender doesn't have enough MTLAP
 			continue
 		}
 
 		recommendeds := make([]mlm.Recommended, 0, len(recommendedDataMap))
 		for _, v := range recommendedDataMap {
-			accountIDRaw, err := base64.StdEncoding.DecodeString(v)
-			if err != nil {
-				spew.Dump(err)
-			}
-			accountID := string(accountIDRaw)
-			recommended, ok := accMap[accountID]
+			recommended, ok := accMap[decodeBase64(v)]
 			if !ok {
 				continue
 			}
 
-			mtlapBalance, _ := strconv.ParseFloat(recommended.GetCreditBalance(MTLAPAsset, MTLAPIssuer), 64)
-			mtlapCount := int(mtlapBalance)
+			if _, ok := uniqueRecommendeds[recommended.AccountID]; ok {
+				_, ok := res.Conflict[recommended.AccountID]
+				if !ok {
+					res.Conflict[recommended.AccountID] = append(res.Conflict[recommended.AccountID], lastRecommendedRecommenders[recommended.AccountID])
+				}
+				res.Conflict[recommended.AccountID] = append(res.Conflict[recommended.AccountID], recommender.AccountID)
+			}
 
-			res.TotalRecommendedMTLAP += mtlapCount
+			mtlapBalance := getBalanceInt(recommended, MTLAPAsset, MTLAPIssuer)
+
+			res.TotalRecommendedMTLAP += mtlapBalance
 
 			recommendeds = append(recommendeds, mlm.Recommended{
 				AccountID:  recommended.AccountID,
-				MTLAPCount: mtlapCount,
+				MTLAPCount: mtlapBalance,
 			})
+
+			lastRecommendedRecommenders[recommended.AccountID] = recommender.AccountID
+			uniqueRecommendeds[recommended.AccountID] = struct{}{}
 		}
 
 		res.Recommenders = append(res.Recommenders, mlm.Recommender{
@@ -115,6 +137,27 @@ func accountsToResult(accs []horizon.Account) *mlm.RecommendersFetchResult {
 	}
 
 	return res
+}
+
+func isRecommenderApplicable(acc horizon.Account) bool {
+	mtlapBalance, _ := strconv.ParseFloat(acc.GetCreditBalance(MTLAPAsset, MTLAPIssuer), 64)
+	return mtlapBalance >= minMTLAPApplicableRecommender
+}
+
+func decodeBase64(s string) string {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func getBalanceInt(acc horizon.Account, asset, issuer string) int {
+	balance, err := strconv.ParseFloat(acc.GetCreditBalance(asset, issuer), 64)
+	if err != nil {
+		return 0
+	}
+	return int(balance)
 }
 
 var _ mlm.StellarAgregator = &Client{}

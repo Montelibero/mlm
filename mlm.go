@@ -17,6 +17,7 @@ type Recommender struct {
 }
 
 type RecommendersFetchResult struct {
+	Conflict              map[string][]string // recommended-recommender
 	Recommenders          []Recommender
 	TotalRecommendedMTLAP int
 }
@@ -36,6 +37,7 @@ type Distribute struct {
 }
 
 type DistributeResult struct {
+	Conflict    map[string][]string // recommended-recommender
 	Distributes []Distribute
 }
 
