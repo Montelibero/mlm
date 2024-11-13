@@ -2,62 +2,52 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
 
-	"github.com/Montelibero/mlm"
+	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
 	"github.com/Montelibero/mlm/stellar"
-	"github.com/samber/lo"
+	"github.com/Montelibero/mlm/tgbot"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/txnbuild"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	l := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	if err := godotenv.Load(); err != nil {
+		l.ErrorContext(ctx, err.Error())
+		os.Exit(1)
+	}
 
 	cl := horizonclient.DefaultPublicNetClient
+
+	conn, err := pgx.Connect(ctx, os.Getenv("POSTGRES_DSN"))
+	if err != nil {
+		l.ErrorContext(ctx, err.Error())
+		os.Exit(1)
+	}
+	db := db.New(conn)
 
 	stell := stellar.NewClient(cl)
 	distrib := distributor.New(stell)
 
-	res, err := distrib.Distribute(ctx)
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_TOKEN"))
 	if err != nil {
-		panic(err)
+		l.ErrorContext(ctx, err.Error())
+		os.Exit(1)
 	}
 
-	accountDetail, err := cl.AccountDetail(horizonclient.AccountRequest{
-		AccountID: distributor.Account,
-	})
-	if err != nil {
-		panic(err)
-	}
+	tgbot := tgbot.New(l, db, bot, stell, distrib)
 
-	ops := lo.Map(res.Distributes, func(d mlm.Distribute, _ int) txnbuild.Operation {
-		return &txnbuild.Payment{
-			Destination: d.AccountID,
-			Amount:      fmt.Sprintf("%.7f", d.Amount),
-			Asset:       txnbuild.CreditAsset{Code: stellar.EURMTLAsset, Issuer: stellar.EURMTLIssuer},
-		}
-	})
-
-	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
-		SourceAccount:        &accountDetail,
-		IncrementSequenceNum: true,
-		Operations:           ops,
-		BaseFee:              10000,
-		Memo:                 txnbuild.MemoText("mtla mlm distribution"),
-		Preconditions: txnbuild.Preconditions{
-			TimeBounds: txnbuild.NewInfiniteTimeout(),
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	xdr, err := tx.Base64()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(xdr)
+	tgbot.Run(ctx) // blocks
 }
