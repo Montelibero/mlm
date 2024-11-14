@@ -3,6 +3,7 @@ package mlm
 import (
 	"context"
 
+	"github.com/Montelibero/mlm/db"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 )
@@ -33,22 +34,11 @@ type HorizonClient interface {
 	horizonclient.ClientInterface
 }
 
-type Recommend struct {
-	Recommender      string
-	Recommended      string
-	RecommendedMTLAP int64
-}
-
-type Distribute struct {
-	AccountID string
-	Amount    float64
-}
-
 type DistributeResult struct {
-	Conflict    map[string][]string // recommended-recommender
 	XDR         string
-	Recommends  []Recommend
-	Distributes []Distribute
+	Conflicts   []db.ReportConflict
+	Recommends  []db.ReportRecommend
+	Distributes []db.ReportDistribute
 }
 
 type Distributor interface {

@@ -103,27 +103,12 @@ func (t *TGBot) newSM() *fsm.FSM {
 					return
 				}
 
-				summary := &strings.Builder{}
-				fmt.Fprintf(summary, "<b>Report results</b>\n")
-
-				for _, distrib := range res.Distributes {
-					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - %f EURMTL\n", distrib.AccountID, addrAbbr(distrib.AccountID), distrib.Amount)
-				}
-
-				fmt.Fprintf(summary, "\n<b>Conflict</b>\n")
-
-				for recommender, recommendeds := range res.Conflict {
-					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommender, addrAbbr(recommender))
-					for _, recommended := range recommendeds {
-						fmt.Fprintf(summary, "    <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommended, addrAbbr(recommended))
-					}
-					fmt.Fprintf(summary, "\n")
-				}
-
-				fmt.Fprintf(summary, "\n<b>XDR</b>\n")
-				fmt.Fprintf(summary, "<code>%s</code>", res.XDR)
-
-				msg := tgbotapi.NewMessage(st.UserID, summary.String())
+				msg := tgbotapi.NewMessage(st.UserID, makeSummary(
+					ctx,
+					res.Distributes,
+					res.Conflicts,
+					res.XDR,
+				))
 				msg.ReplyMarkup = reportResultButtons
 				msg.ParseMode = "HTML"
 				if _, err := t.bot.Send(msg); err != nil {
@@ -151,20 +136,35 @@ func (t *TGBot) newSM() *fsm.FSM {
 					return
 				}
 
-				// TODO: make one report message
-				summary := &strings.Builder{}
-				fmt.Fprintf(summary, "<b>Report #%d %s</b>\n", rep.ID, rep.CreatedAt.Time.Format(time.DateOnly))
-
-				for _, distrib := range distribs {
-					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - %f %s\n", distrib.Recommender, addrAbbr(distrib.Recommender), distrib.Amount, distrib.Asset)
+				conflicts, err := t.q.GetReportConflicts(ctx, id)
+				if err != nil {
+					e.Cancel(err)
+					return
 				}
 
-				fmt.Fprintf(summary, "\n<b>XDR</b>\n")
-				fmt.Fprintf(summary, "<code>%s</code>", rep.Xdr)
-
-				msg := tgbotapi.NewMessage(st.UserID, summary.String())
+				msg := tgbotapi.NewMessage(st.UserID, makeSummary(ctx, distribs, conflicts, rep.Xdr))
 				msg.ReplyMarkup = reportResultButtons
 				msg.ParseMode = "HTML"
+				if _, err := t.bot.Send(msg); err != nil {
+					e.Cancel(err)
+				}
+			},
+			eventReportDelete: func(ctx context.Context, e *fsm.Event) {
+				st := e.Args[0].(db.State)
+				idStr := e.Args[1].(string)
+				id, err := strconv.ParseInt(idStr, 10, 64)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				if err := t.q.DeleteReport(ctx, id); err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				msg := tgbotapi.NewMessage(st.UserID, "Report deleted")
+				msg.ReplyMarkup = reportResultButtons
 				if _, err := t.bot.Send(msg); err != nil {
 					e.Cancel(err)
 				}
@@ -174,4 +174,34 @@ func (t *TGBot) newSM() *fsm.FSM {
 
 func addrAbbr(addr string) string {
 	return fmt.Sprintf("%s...%s", addr[:4], addr[len(addr)-4:])
+}
+
+func makeSummary(
+	_ context.Context,
+	distributes []db.ReportDistribute,
+	conflicts []db.ReportConflict,
+	xdr string,
+) string {
+	summary := &strings.Builder{}
+	fmt.Fprintf(summary, "<b>Report results</b>\n")
+
+	fmt.Fprintf(summary, "\n<b>Distributes</b>\n")
+
+	for _, distrib := range distributes {
+		fmt.Fprintf(summary, "<a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - %f %s\n", distrib.Recommender, addrAbbr(distrib.Recommender), distrib.Amount, distrib.Asset)
+	}
+
+	if len(conflicts) > 0 {
+		fmt.Fprintf(summary, "\n<b>Conflicts</b>\n")
+
+		for _, conflict := range conflicts {
+			fmt.Fprintf(summary, "<a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - ", conflict.Recommender, addrAbbr(conflict.Recommender))
+			fmt.Fprintf(summary, "<a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", conflict.Recommended, addrAbbr(conflict.Recommended))
+		}
+	}
+
+	fmt.Fprintf(summary, "\n<b>XDR</b>\n")
+	fmt.Fprintf(summary, "<code>%s</code>", xdr)
+
+	return summary.String()
 }

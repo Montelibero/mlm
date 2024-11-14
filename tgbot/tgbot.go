@@ -80,21 +80,32 @@ func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 	st.Meta["chat_title"] = upd.Message.Chat.Title
 	st.Meta["chat_id"] = upd.Message.Chat.ID
 
-	ev := upd.Message.Text
-	args := make([]interface{}, 0)
-	args = append(args, st)
-
-	if strings.HasPrefix(upd.Message.Text, eventReportResult) {
-		id := ev[len(eventReportResult)+1:]
-		args = append(args, id)
-		ev = eventReportResult
-	}
+	ev, args := prepareEventAndArgs(upd.Message.Text, st)
 
 	if err := sm.Event(ctx, ev, args...); err != nil && !errors.Is(err, fsm.NoTransitionError{}) {
 		return err
 	}
 
 	return nil
+}
+
+var eventsWithArgs = []string{
+	eventReportResult,
+	eventReportDelete,
+}
+
+func prepareEventAndArgs(text string, args ...interface{}) (string, []interface{}) {
+	ev := text
+
+	for _, e := range eventsWithArgs {
+		if strings.HasPrefix(text, e) {
+			id := text[len(e)+1:]
+			args = append(args, id)
+			ev = e
+		}
+	}
+
+	return ev, args
 }
 
 func New(

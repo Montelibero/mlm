@@ -106,7 +106,7 @@ func (d *Distributor) getDistributeAmount(ctx context.Context) (float64, error) 
 		return 0, ErrNoBalance
 	}
 
-	return bal, nil
+	return bal / 3 * 10000000 / 10000000, nil
 }
 
 func (d *Distributor) calcuateParts(
@@ -116,11 +116,20 @@ func (d *Distributor) calcuateParts(
 	recs *mlm.RecommendersFetchResult,
 ) (*mlm.DistributeResult, error) {
 	res := &mlm.DistributeResult{
-		Conflict:    recs.Conflict,
-		Recommends:  make([]mlm.Recommend, 0),
-		Distributes: make([]mlm.Distribute, 0),
+		Conflicts:   make([]db.ReportConflict, 0),
+		Recommends:  make([]db.ReportRecommend, 0),
+		Distributes: make([]db.ReportDistribute, 0),
 	}
 	part := distributeAmount / float64(recs.TotalRecommendedMTLAP)
+
+	for recommended, recommenders := range recs.Conflict {
+		for _, recoomender := range recommenders {
+			res.Conflicts = append(res.Conflicts, db.ReportConflict{
+				Recommender: recoomender,
+				Recommended: recommended,
+			})
+		}
+	}
 
 	for _, recommender := range recs.Recommenders {
 		partCount := int64(0)
@@ -135,33 +144,34 @@ func (d *Distributor) calcuateParts(
 				partCount += recommended.MTLAP - lastMTLAP
 			}
 
-			res.Recommends = append(res.Recommends, mlm.Recommend{
+			res.Recommends = append(res.Recommends, db.ReportRecommend{
 				Recommender:      recommender.AccountID,
 				Recommended:      recommended.AccountID,
-				RecommendedMTLAP: recommended.MTLAP,
+				RecommendedMtlap: recommended.MTLAP,
 			})
 		}
 
-		res.Distributes = append(res.Distributes, mlm.Distribute{
-			AccountID: recommender.AccountID,
-			Amount:    math.Floor(float64(partCount)*part*10000000) / 10000000,
+		res.Distributes = append(res.Distributes, db.ReportDistribute{
+			Recommender: recommender.AccountID,
+			Asset:       stellar.EURMTLAsset,
+			Amount:      math.Floor(float64(partCount)*part*10000000) / 10000000,
 		})
 	}
 
 	return res, nil
 }
 
-func (d *Distributor) getXDR(ctx context.Context, distributes []mlm.Distribute) (string, error) {
+func (d *Distributor) getXDR(ctx context.Context, distributes []db.ReportDistribute) (string, error) {
 	accountDetail, err := d.stellar.AccountDetail(Account)
 	if err != nil {
 		return "", err
 	}
 
-	ops := lo.Map(distributes, func(d mlm.Distribute, _ int) txnbuild.Operation {
+	ops := lo.Map(distributes, func(d db.ReportDistribute, _ int) txnbuild.Operation {
 		return &txnbuild.Payment{
-			Destination: d.AccountID,
+			Destination: d.Recommender,
 			Amount:      fmt.Sprintf("%.7f", d.Amount),
-			Asset:       txnbuild.CreditAsset{Code: stellar.EURMTLAsset, Issuer: stellar.EURMTLIssuer},
+			Asset:       txnbuild.CreditAsset{Code: d.Asset, Issuer: stellar.EURMTLIssuer},
 		}
 	})
 
@@ -206,7 +216,7 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 			ReportID:         reportID,
 			Recommender:      recommend.Recommender,
 			Recommended:      recommend.Recommended,
-			RecommendedMtlap: recommend.RecommendedMTLAP,
+			RecommendedMtlap: recommend.RecommendedMtlap,
 		}); err != nil {
 			return err
 		}
@@ -215,9 +225,19 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 	for _, distrib := range res.Distributes {
 		if err := qtx.CreateReportDistribute(ctx, db.CreateReportDistributeParams{
 			ReportID:    reportID,
-			Recommender: distrib.AccountID,
-			Asset:       "EURMTL",
+			Recommender: distrib.Recommender,
+			Asset:       distrib.Asset,
 			Amount:      distrib.Amount,
+		}); err != nil {
+			return err
+		}
+	}
+
+	for _, conflict := range res.Conflicts {
+		if err := qtx.CreateReportConflict(ctx, db.CreateReportConflictParams{
+			ReportID:    reportID,
+			Recommender: conflict.Recommender,
+			Recommended: conflict.Recommended,
 		}); err != nil {
 			return err
 		}

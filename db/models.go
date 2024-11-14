@@ -15,6 +15,12 @@ type Report struct {
 	Xdr       string
 }
 
+type ReportConflict struct {
+	ReportID    int64
+	Recommender string
+	Recommended string
+}
+
 type ReportDistribute struct {
 	ReportID    int64
 	Recommender string

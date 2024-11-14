@@ -44,6 +44,14 @@ WHERE report_id = @report_id;
 INSERT INTO report_distributes (report_id, recommender, asset, amount)
   VALUES (@report_id, @recommender, @asset, @amount);
 
+-- name: GetReportConflicts :many
+SELECT * FROM report_conflicts
+WHERE report_id = @report_id;
+
+-- name: CreateReportConflict :exec
+INSERT INTO report_conflicts (report_id, recommender, recommended)
+  VALUES (@report_id, @recommender, @recommended);
+
 -- name: LockReport :exec
 SELECT pg_advisory_lock(1);
 
