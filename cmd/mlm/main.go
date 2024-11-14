@@ -31,15 +31,15 @@ func main() {
 
 	cl := horizonclient.DefaultPublicNetClient
 
-	conn, err := pgx.Connect(ctx, os.Getenv("POSTGRES_DSN"))
+	pg, err := pgx.Connect(ctx, os.Getenv("POSTGRES_DSN"))
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)
 	}
-	db := db.New(conn)
+	q := db.New(pg)
 
 	stell := stellar.NewClient(cl)
-	distrib := distributor.New(stell)
+	distrib := distributor.New(stell, q, pg)
 
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_TOKEN"))
 	if err != nil {
@@ -47,7 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	tgbot := tgbot.New(l, db, bot, stell, distrib)
+	tgbot := tgbot.New(l, q, bot, distrib)
 
 	tgbot.Run(ctx) // blocks
 }

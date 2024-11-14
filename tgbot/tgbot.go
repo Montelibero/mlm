@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
-	"github.com/Montelibero/mlm/stellar"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/looplab/fsm"
@@ -15,9 +15,8 @@ import (
 
 type TGBot struct {
 	l       *slog.Logger
-	db      db.Querier
+	q       *db.Queries
 	bot     *tgbotapi.BotAPI
-	stellar *stellar.Client
 	distrib *distributor.Distributor
 }
 
@@ -38,7 +37,7 @@ func (t *TGBot) Run(ctx context.Context) {
 			)
 
 			if err := t.handle(ctx, upd); err != nil {
-				t.l.ErrorContext(ctx, "failed to handle update",
+				t.l.ErrorContext(ctx, "[tg] failed to handle update",
 					slog.Int64("from_id", upd.Message.From.ID),
 					slog.Int64("chat_id", upd.Message.Chat.ID),
 					slog.String("text", upd.Message.Text),
@@ -56,7 +55,7 @@ func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 		return nil
 	}
 
-	st, err := t.db.GetState(ctx, upd.Message.From.ID)
+	st, err := t.q.GetState(ctx, upd.Message.From.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		st = db.State{
 			UserID: upd.Message.From.ID,
@@ -81,7 +80,17 @@ func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 	st.Meta["chat_title"] = upd.Message.Chat.Title
 	st.Meta["chat_id"] = upd.Message.Chat.ID
 
-	if err := sm.Event(ctx, upd.Message.Text, st); err != nil && !errors.Is(err, fsm.NoTransitionError{}) {
+	ev := upd.Message.Text
+	args := make([]interface{}, 0)
+	args = append(args, st)
+
+	if strings.HasPrefix(upd.Message.Text, eventReportResult) {
+		id := ev[len(eventReportResult)+1:]
+		args = append(args, id)
+		ev = eventReportResult
+	}
+
+	if err := sm.Event(ctx, ev, args...); err != nil && !errors.Is(err, fsm.NoTransitionError{}) {
 		return err
 	}
 
@@ -90,16 +99,14 @@ func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 
 func New(
 	l *slog.Logger,
-	db db.Querier,
+	q *db.Queries,
 	bot *tgbotapi.BotAPI,
-	stellar *stellar.Client,
 	distrib *distributor.Distributor,
 ) *TGBot {
 	return &TGBot{
 		l:       l,
-		db:      db,
+		q:       q,
 		bot:     bot,
-		stellar: stellar,
 		distrib: distrib,
 	}
 }

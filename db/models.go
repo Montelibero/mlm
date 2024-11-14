@@ -8,6 +8,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Report struct {
+	ID        int64
+	CreatedAt pgtype.Timestamptz
+	DeletedAt pgtype.Timestamptz
+	Xdr       string
+}
+
+type ReportDistribute struct {
+	ReportID    int64
+	Recommender string
+	Asset       string
+	Amount      float64
+}
+
+type ReportRecommend struct {
+	ReportID         int64
+	Recommender      string
+	Recommended      string
+	RecommendedMtlap int64
+}
+
 type State struct {
 	UserID    int64
 	State     string

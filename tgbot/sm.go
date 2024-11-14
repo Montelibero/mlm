@@ -3,38 +3,36 @@ package tgbot
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
-	"github.com/Montelibero/mlm"
 	"github.com/Montelibero/mlm/db"
-	"github.com/Montelibero/mlm/distributor"
-	"github.com/Montelibero/mlm/stellar"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/looplab/fsm"
-	"github.com/samber/lo"
-	"github.com/stellar/go/txnbuild"
 )
 
 const (
 	// states
-	stateInit   = "state_init"
-	stateMain   = "state_main"
-	stateResult = "state_result"
+	stateInit         = "state_init"
+	stateReports      = "state_reports"
+	stateReportResult = "state_report_result"
 
 	// events
-	eventStart     = "/start"
-	eventReports   = "/reports"
-	eventMLMDryRun = "/mlm_dry_run"
+	eventStart        = "/start"
+	eventReportRun    = "/report_run"
+	eventReportDelete = "/report_delete"
+	eventReportResult = "/report_result"
 )
 
-var mainButtons = tgbotapi.NewReplyKeyboard(
+var startButtons = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
-		tgbotapi.NewKeyboardButton(eventReports),
-		tgbotapi.NewKeyboardButton(eventMLMDryRun),
+		tgbotapi.NewKeyboardButton(eventStart),
+		tgbotapi.NewKeyboardButton(eventReportRun),
 	),
 )
 
-var resultButtons = tgbotapi.NewReplyKeyboard(
+var reportResultButtons = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton(eventStart),
 	),
@@ -44,44 +42,55 @@ func (t *TGBot) newSM() *fsm.FSM {
 	return fsm.NewFSM(
 		stateInit,
 		fsm.Events{
-			{Name: eventStart, Src: []string{stateInit}, Dst: stateMain},
-			{Name: eventStart, Src: []string{stateResult}, Dst: stateMain},
-			{Name: eventMLMDryRun, Src: []string{stateMain}, Dst: stateResult},
-			{Name: eventMLMDryRun, Src: []string{stateResult}, Dst: stateResult},
+			{Name: eventStart, Src: []string{stateInit, stateReports, stateReportResult}, Dst: stateReports},
+			{Name: eventReportRun, Src: []string{stateReports}, Dst: stateReportResult},
+			{Name: eventReportResult, Src: []string{stateReports}, Dst: stateReportResult},
+			{Name: eventReportDelete, Src: []string{stateReports, stateReportResult}, Dst: stateReports},
 		},
 		fsm.Callbacks{
-			eventStart: func(ctx context.Context, e *fsm.Event) {
+			"before_event": func(ctx context.Context, e *fsm.Event) {
 				st := e.Args[0].(db.State)
-
-				if err := t.db.CreateState(ctx, db.CreateStateParams{
+				if err := t.q.CreateState(ctx, db.CreateStateParams{
 					UserID: st.UserID,
-					State:  stateMain,
+					State:  e.Dst,
 					Data:   st.Data,
 					Meta:   st.Meta,
 				}); err != nil {
 					e.Cancel(err)
 					return
 				}
+			},
+			eventStart: func(ctx context.Context, e *fsm.Event) {
+				st := e.Args[0].(db.State)
 
-				msg := tgbotapi.NewMessage(st.UserID, "Welcome to MLM bot")
-				msg.ReplyMarkup = mainButtons
+				rr, err := t.q.GetReports(ctx, 12)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				scr := &strings.Builder{}
+
+				fmt.Fprintf(scr, "<b>Reports</b>\n")
+
+				for _, r := range rr {
+					fmt.Fprintf(scr, "  /report_result_%d %s\n", r.ID, r.CreatedAt.Time.Format(time.DateOnly))
+				}
+
+				if len(rr) == 0 {
+					fmt.Fprintf(scr, "  <i>nothing to report</i>\n")
+				}
+
+				msg := tgbotapi.NewMessage(st.UserID, scr.String())
+				msg.ReplyMarkup = startButtons
+				msg.ParseMode = "HTML"
 				if _, err := t.bot.Send(msg); err != nil {
 					e.Cancel(err)
 				}
 			},
 
-			eventMLMDryRun: func(ctx context.Context, e *fsm.Event) {
+			eventReportRun: func(ctx context.Context, e *fsm.Event) {
 				st := e.Args[0].(db.State)
-
-				if err := t.db.CreateState(ctx, db.CreateStateParams{
-					UserID: st.UserID,
-					State:  stateResult,
-					Data:   st.Data,
-					Meta:   st.Meta,
-				}); err != nil {
-					e.Cancel(err)
-					return
-				}
 
 				if _, err := t.bot.Send(tgbotapi.NewMessage(st.UserID, "Processing...")); err != nil {
 					e.Cancel(err)
@@ -94,65 +103,67 @@ func (t *TGBot) newSM() *fsm.FSM {
 					return
 				}
 
-				accountDetail, err := t.stellar.AccountDetail(distributor.Account)
-				if err != nil {
-					e.Cancel(err)
-					return
-				}
-
-				ops := lo.Map(res.Distributes, func(d mlm.Distribute, _ int) txnbuild.Operation {
-					return &txnbuild.Payment{
-						Destination: d.AccountID,
-						Amount:      fmt.Sprintf("%.7f", d.Amount),
-						Asset:       txnbuild.CreditAsset{Code: stellar.EURMTLAsset, Issuer: stellar.EURMTLIssuer},
-					}
-				})
-
-				tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
-					SourceAccount:        &accountDetail,
-					IncrementSequenceNum: true,
-					Operations:           ops,
-					BaseFee:              10000,
-					Memo:                 txnbuild.MemoText("mtla mlm distribution"),
-					Preconditions: txnbuild.Preconditions{
-						TimeBounds: txnbuild.NewInfiniteTimeout(),
-					},
-				})
-				if err != nil {
-					e.Cancel(err)
-					return
-				}
-
-				xdr, err := tx.Base64()
-				if err != nil {
-					e.Cancel(err)
-					return
-				}
-
-				// TODO(xdefrag): save report
-
-				reportStr := &strings.Builder{}
-				fmt.Fprintf(reportStr, "<b>Report results</b>\n")
+				summary := &strings.Builder{}
+				fmt.Fprintf(summary, "<b>Report results</b>\n")
 
 				for _, distrib := range res.Distributes {
-					fmt.Fprintf(reportStr, "  <b>AccountID</b>: <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n <b>Amount</b>: %f EURMTL\n\n", distrib.AccountID, addrAbbr(distrib.AccountID), distrib.Amount)
+					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - %f EURMTL\n", distrib.AccountID, addrAbbr(distrib.AccountID), distrib.Amount)
 				}
 
-				fmt.Fprintf(reportStr, "\n<b>Conflict</b>\n")
+				fmt.Fprintf(summary, "\n<b>Conflict</b>\n")
 
 				for recommender, recommendeds := range res.Conflict {
-					fmt.Fprintf(reportStr, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommender, addrAbbr(recommender))
+					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommender, addrAbbr(recommender))
 					for _, recommended := range recommendeds {
-						fmt.Fprintf(reportStr, "    <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommended, addrAbbr(recommended))
+						fmt.Fprintf(summary, "    <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a>\n", recommended, addrAbbr(recommended))
 					}
-					fmt.Fprintf(reportStr, "\n")
+					fmt.Fprintf(summary, "\n")
 				}
 
-				fmt.Fprintf(reportStr, "\n<b>XDR</b>\n")
-				fmt.Fprintf(reportStr, "<code>%s</code>", xdr)
+				fmt.Fprintf(summary, "\n<b>XDR</b>\n")
+				fmt.Fprintf(summary, "<code>%s</code>", res.XDR)
 
-				msg := tgbotapi.NewMessage(st.UserID, reportStr.String())
-				msg.ReplyMarkup = resultButtons
+				msg := tgbotapi.NewMessage(st.UserID, summary.String())
+				msg.ReplyMarkup = reportResultButtons
+				msg.ParseMode = "HTML"
+				if _, err := t.bot.Send(msg); err != nil {
+					e.Cancel(err)
+				}
+			},
+			eventReportResult: func(ctx context.Context, e *fsm.Event) {
+				st := e.Args[0].(db.State)
+				idStr := e.Args[1].(string)
+				id, err := strconv.ParseInt(idStr, 10, 64)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				rep, err := t.q.GetReport(ctx, id)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				distribs, err := t.q.GetReportDistributes(ctx, id)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				// TODO: make one report message
+				summary := &strings.Builder{}
+				fmt.Fprintf(summary, "<b>Report #%d %s</b>\n", rep.ID, rep.CreatedAt.Time.Format(time.DateOnly))
+
+				for _, distrib := range distribs {
+					fmt.Fprintf(summary, "  <a href=\"https://bsn.mtla.me/accounts/%s\">%s</a> - %f %s\n", distrib.Recommender, addrAbbr(distrib.Recommender), distrib.Amount, distrib.Asset)
+				}
+
+				fmt.Fprintf(summary, "\n<b>XDR</b>\n")
+				fmt.Fprintf(summary, "<code>%s</code>", rep.Xdr)
+
+				msg := tgbotapi.NewMessage(st.UserID, summary.String())
+				msg.ReplyMarkup = reportResultButtons
 				msg.ParseMode = "HTML"
 				if _, err := t.bot.Send(msg); err != nil {
 					e.Cancel(err)
