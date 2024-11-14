@@ -21,6 +21,22 @@ func (q *Queries) CreateReport(ctx context.Context, xdr string) (int64, error) {
 	return id, err
 }
 
+const createReportConflict = `-- name: CreateReportConflict :exec
+INSERT INTO report_conflicts (report_id, recommender, recommended)
+  VALUES ($1, $2, $3)
+`
+
+type CreateReportConflictParams struct {
+	ReportID    int64
+	Recommender string
+	Recommended string
+}
+
+func (q *Queries) CreateReportConflict(ctx context.Context, arg CreateReportConflictParams) error {
+	_, err := q.db.Exec(ctx, createReportConflict, arg.ReportID, arg.Recommender, arg.Recommended)
+	return err
+}
+
 const createReportDistribute = `-- name: CreateReportDistribute :exec
 INSERT INTO report_distributes (report_id, recommender, asset, amount)
   VALUES ($1, $2, $3, $4)
@@ -114,6 +130,31 @@ func (q *Queries) GetReport(ctx context.Context, id int64) (Report, error) {
 		&i.Xdr,
 	)
 	return i, err
+}
+
+const getReportConflicts = `-- name: GetReportConflicts :many
+SELECT report_id, recommender, recommended FROM report_conflicts
+WHERE report_id = $1
+`
+
+func (q *Queries) GetReportConflicts(ctx context.Context, reportID int64) ([]ReportConflict, error) {
+	rows, err := q.db.Query(ctx, getReportConflicts, reportID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReportConflict
+	for rows.Next() {
+		var i ReportConflict
+		if err := rows.Scan(&i.ReportID, &i.Recommender, &i.Recommended); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getReportDistributes = `-- name: GetReportDistributes :many

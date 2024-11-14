@@ -10,11 +10,13 @@ import (
 
 type Querier interface {
 	CreateReport(ctx context.Context, xdr string) (int64, error)
+	CreateReportConflict(ctx context.Context, arg CreateReportConflictParams) error
 	CreateReportDistribute(ctx context.Context, arg CreateReportDistributeParams) error
 	CreateReportRecommend(ctx context.Context, arg CreateReportRecommendParams) error
 	CreateState(ctx context.Context, arg CreateStateParams) error
 	DeleteReport(ctx context.Context, id int64) error
 	GetReport(ctx context.Context, id int64) (Report, error)
+	GetReportConflicts(ctx context.Context, reportID int64) ([]ReportConflict, error)
 	GetReportDistributes(ctx context.Context, reportID int64) ([]ReportDistribute, error)
 	GetReportRecommends(ctx context.Context, reportID int64) ([]ReportRecommend, error)
 	GetReports(ctx context.Context, queryLimit int32) ([]Report, error)
