@@ -9,8 +9,18 @@ import (
 )
 
 type Querier interface {
+	CreateReport(ctx context.Context, xdr string) (int64, error)
+	CreateReportDistribute(ctx context.Context, arg CreateReportDistributeParams) error
+	CreateReportRecommend(ctx context.Context, arg CreateReportRecommendParams) error
 	CreateState(ctx context.Context, arg CreateStateParams) error
+	DeleteReport(ctx context.Context, id int64) error
+	GetReport(ctx context.Context, id int64) (Report, error)
+	GetReportDistributes(ctx context.Context, reportID int64) ([]ReportDistribute, error)
+	GetReportRecommends(ctx context.Context, reportID int64) ([]ReportRecommend, error)
+	GetReports(ctx context.Context, queryLimit int32) ([]Report, error)
 	GetState(ctx context.Context, userID int64) (State, error)
+	LockReport(ctx context.Context) error
+	UnlockReport(ctx context.Context) error
 }
 
 var _ Querier = (*Queries)(nil)

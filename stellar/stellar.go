@@ -117,13 +117,13 @@ func accountsToResult(accs []horizon.Account) *mlm.RecommendersFetchResult {
 				res.Conflict[recommended.AccountID] = append(res.Conflict[recommended.AccountID], recommender.AccountID)
 			}
 
-			mtlapBalance := getBalanceInt(recommended, MTLAPAsset, MTLAPIssuer)
+			mtlapBalance := getBalanceInt64(recommended, MTLAPAsset, MTLAPIssuer)
 
 			res.TotalRecommendedMTLAP += mtlapBalance
 
 			recommendeds = append(recommendeds, mlm.Recommended{
-				AccountID:  recommended.AccountID,
-				MTLAPCount: mtlapBalance,
+				AccountID: recommended.AccountID,
+				MTLAP:     mtlapBalance,
 			})
 
 			lastRecommendedRecommenders[recommended.AccountID] = recommender.AccountID
@@ -152,12 +152,12 @@ func decodeBase64(s string) string {
 	return string(b)
 }
 
-func getBalanceInt(acc horizon.Account, asset, issuer string) int {
+func getBalanceInt64(acc horizon.Account, asset, issuer string) int64 {
 	balance, err := strconv.ParseFloat(acc.GetCreditBalance(asset, issuer), 64)
 	if err != nil {
 		return 0
 	}
-	return int(balance)
+	return int64(balance)
 }
 
 var _ mlm.StellarAgregator = &Client{}
