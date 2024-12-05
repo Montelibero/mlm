@@ -15,6 +15,7 @@ type Config struct {
 	Address        string
 	Seed           string
 	Submit         bool
+	WithourReport  bool
 }
 
 func Get() *Config {
@@ -37,6 +38,7 @@ func Get() *Config {
 		Address:        os.Getenv("STELLAR_ADDRESS"),
 		Seed:           os.Getenv("STELLAR_SEED"),
 		Submit:         os.Getenv("SUBMIT") == "true",
+		WithourReport:  os.Getenv("WITHOUT_REPORT") == "true",
 		AllowedUserIDs: allowedUserIDs,
 	}
 }

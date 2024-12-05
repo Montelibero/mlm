@@ -26,7 +26,13 @@ type Distributor struct {
 	pg      *pgx.Conn
 }
 
-func (d *Distributor) Distribute(ctx context.Context) (*mlm.DistributeResult, error) {
+func (d *Distributor) Distribute(ctx context.Context, opts ...mlm.DistributeOption) (*mlm.DistributeResult, error) {
+	opt := &mlm.DistributeOptions{}
+
+	for _, o := range opts {
+		o(opt)
+	}
+
 	if err := d.q.LockReport(ctx); err != nil {
 		return nil, err
 	}
@@ -55,6 +61,10 @@ func (d *Distributor) Distribute(ctx context.Context) (*mlm.DistributeResult, er
 	res.XDR, err = d.getXDR(ctx, res.Distributes)
 	if err != nil {
 		return nil, err
+	}
+
+	if opt.WithoutReport {
+		return res, nil
 	}
 
 	res.ReportID, err = d.createReport(ctx, res)

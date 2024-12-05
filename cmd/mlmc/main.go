@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/Montelibero/mlm"
 	"github.com/Montelibero/mlm/config"
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
@@ -36,7 +37,13 @@ func main() {
 	stell := stellar.NewClient(cl)
 	distrib := distributor.New(cfg, stell, q, pg)
 
-	res, err := distrib.Distribute(ctx)
+	distribOpts := []mlm.DistributeOption{}
+
+	if cfg.WithourReport {
+		distribOpts = append(distribOpts, mlm.WithoutReport())
+	}
+
+	res, err := distrib.Distribute(ctx, distribOpts...)
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)

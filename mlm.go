@@ -46,6 +46,18 @@ type DistributeResult struct {
 	Distributes []db.ReportDistribute
 }
 
+type DistributeOptions struct {
+	WithoutReport bool
+}
+
+type DistributeOption func(*DistributeOptions)
+
+func WithoutReport() DistributeOption {
+	return func(o *DistributeOptions) {
+		o.WithoutReport = true
+	}
+}
+
 type Distributor interface {
-	Distribute(ctx context.Context) (*DistributeResult, error)
+	Distribute(ctx context.Context, opts ...DistributeOption) (*DistributeResult, error)
 }
