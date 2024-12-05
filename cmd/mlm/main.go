@@ -26,7 +26,6 @@ func main() {
 
 	if err := godotenv.Load(); err != nil {
 		l.ErrorContext(ctx, err.Error())
-		os.Exit(1)
 	}
 
 	cl := horizonclient.DefaultPublicNetClient
