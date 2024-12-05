@@ -27,7 +27,7 @@ func (t *TGBot) Run(ctx context.Context) {
 		select {
 		case upd := <-updchan:
 			if upd.Message == nil {
-				return
+				continue
 			}
 
 			t.l.DebugContext(ctx, "[tg] new message",

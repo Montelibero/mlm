@@ -16,8 +16,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 )
 
-// const Account = "GDWXHJJZDQNR5OUGVWEVEXBSBQ6GQSKULOIXFQ63PCOXRSPOOQTYMMLM" // TODO: move to config
-const Account = "GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA" // TODO: move to config
+const Account = "GCE67FN5AQN57YRMIVBPDHSFRVRC6JINL6OZHCNJNBJF3Z6MPZMTLMLM"
 
 var ErrNoBalance = errors.New("no balance")
 
