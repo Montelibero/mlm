@@ -2,11 +2,15 @@ package mlm
 
 import (
 	"context"
+	"embed"
 
 	"github.com/Montelibero/mlm/db"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 )
+
+//go:embed migrations/*.sql
+var EmbedMigrations embed.FS
 
 type Recommended struct {
 	AccountID string
