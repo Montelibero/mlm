@@ -16,7 +16,7 @@ func TestDistributor_Distribute(t *testing.T) {
 
 	ctx := context.Background()
 	recs := stellar.NewClient(horizonclient.DefaultPublicNetClient)
-	distr := distributor.New(recs, nil, nil)
+	distr := distributor.New(nil, recs, nil, nil)
 
 	res, err := distr.Distribute(ctx)
 	require.NoError(t, err)

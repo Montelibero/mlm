@@ -8,6 +8,7 @@ import (
 	"os/signal"
 
 	"github.com/Montelibero/mlm"
+	"github.com/Montelibero/mlm/config"
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
 	"github.com/Montelibero/mlm/stellar"
@@ -15,7 +16,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 	"github.com/stellar/go/clients/horizonclient"
 )
@@ -28,14 +28,12 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	if err := godotenv.Load(); err != nil {
-		l.ErrorContext(ctx, err.Error())
-	}
+	cfg := config.Get()
 
 	goose.SetDialect("pgx")
 	goose.SetBaseFS(mlm.EmbedMigrations)
 
-	conn, err := sql.Open("pgx", os.Getenv("POSTGRES_DSN"))
+	conn, err := sql.Open("pgx", cfg.PostgresDSN)
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)
@@ -52,7 +50,7 @@ func main() {
 
 	cl := horizonclient.DefaultPublicNetClient
 
-	pg, err := pgx.Connect(ctx, os.Getenv("POSTGRES_DSN"))
+	pg, err := pgx.Connect(ctx, cfg.PostgresDSN)
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)
@@ -62,15 +60,15 @@ func main() {
 	q := db.New(pg)
 
 	stell := stellar.NewClient(cl)
-	distrib := distributor.New(stell, q, pg)
+	distrib := distributor.New(cfg, stell, q, pg)
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_TOKEN"))
+	bot, err := tgbotapi.NewBotAPI(cfg.TelegramToken)
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)
 	}
 
-	tgbot := tgbot.New(l, q, bot, distrib)
+	tgbot := tgbot.New(cfg, l, q, bot, distrib, stell)
 
 	tgbot.Run(ctx) // blocks
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Montelibero/mlm"
+	"github.com/Montelibero/mlm/config"
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/stellar"
 	"github.com/jackc/pgx/v5"
@@ -16,11 +17,10 @@ import (
 	"github.com/stellar/go/txnbuild"
 )
 
-const Account = "GCE67FN5AQN57YRMIVBPDHSFRVRC6JINL6OZHCNJNBJF3Z6MPZMTLMLM"
-
 var ErrNoBalance = errors.New("no balance")
 
 type Distributor struct {
+	cfg     *config.Config
 	stellar mlm.StellarAgregator
 	q       *db.Queries
 	pg      *pgx.Conn
@@ -91,7 +91,7 @@ func (d *Distributor) getLastDistribute(ctx context.Context) (map[string]map[str
 }
 
 func (d *Distributor) getDistributeAmount(ctx context.Context) (float64, error) {
-	balstr, err := d.stellar.Balance(ctx, Account, stellar.EURMTLAsset, stellar.EURMTLIssuer)
+	balstr, err := d.stellar.Balance(ctx, d.cfg.Address, stellar.EURMTLAsset, stellar.EURMTLIssuer)
 	if err != nil {
 		return 0, err
 	}
@@ -161,7 +161,7 @@ func (d *Distributor) calcuateParts(
 }
 
 func (d *Distributor) getXDR(ctx context.Context, distributes []db.ReportDistribute) (string, error) {
-	accountDetail, err := d.stellar.AccountDetail(Account)
+	accountDetail, err := d.stellar.AccountDetail(d.cfg.Address)
 	if err != nil {
 		return "", err
 	}
@@ -246,11 +246,13 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 }
 
 func New(
+	cfg *config.Config,
 	stellar mlm.StellarAgregator,
 	q *db.Queries,
 	pg *pgx.Conn,
 ) *Distributor {
 	return &Distributor{
+		cfg:     cfg,
 		stellar: stellar,
 		q:       q,
 		pg:      pg,

@@ -9,7 +9,10 @@ import (
 	"github.com/Montelibero/mlm"
 	"github.com/samber/lo"
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/txnbuild"
 )
 
 const (
@@ -72,6 +75,32 @@ func (c *Client) AccountDetail(accountID string) (horizon.Account, error) {
 	return c.cl.AccountDetail(horizonclient.AccountRequest{
 		AccountID: accountID,
 	})
+}
+
+func (c *Client) SubmitXDR(ctx context.Context, seed, xdr string) (string, error) {
+	pair, err := keypair.ParseFull(seed)
+	if err != nil {
+		return "", err
+	}
+
+	txg, err := txnbuild.TransactionFromXDR(xdr)
+	if err != nil {
+		return "", err
+	}
+
+	tx, _ := txg.Transaction()
+
+	tx, err = tx.Sign(network.PublicNetworkPassphrase, pair)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := c.cl.SubmitTransaction(tx)
+	if err != nil {
+		return "", err
+	}
+
+	return res.Hash, nil
 }
 
 func NewClient(cl horizonclient.ClientInterface) *Client {

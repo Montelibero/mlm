@@ -23,6 +23,7 @@ const (
 	eventReportRun    = "/report_run"
 	eventReportDelete = "/report_delete"
 	eventReportResult = "/report_result"
+	eventReportSubmit = "/report_submit"
 )
 
 var startButtons = tgbotapi.NewReplyKeyboard(
@@ -46,6 +47,7 @@ func (t *TGBot) newSM() *fsm.FSM {
 			{Name: eventReportRun, Src: []string{stateReports}, Dst: stateReportResult},
 			{Name: eventReportResult, Src: []string{stateReports}, Dst: stateReportResult},
 			{Name: eventReportDelete, Src: []string{stateReports, stateReportResult}, Dst: stateReports},
+			{Name: eventReportSubmit, Src: []string{stateReportResult}, Dst: stateReports},
 		},
 		fsm.Callbacks{
 			"before_event": func(ctx context.Context, e *fsm.Event) {
@@ -88,7 +90,6 @@ func (t *TGBot) newSM() *fsm.FSM {
 					e.Cancel(err)
 				}
 			},
-
 			eventReportRun: func(ctx context.Context, e *fsm.Event) {
 				st := e.Args[0].(db.State)
 
@@ -143,8 +144,39 @@ func (t *TGBot) newSM() *fsm.FSM {
 				}
 
 				msg := tgbotapi.NewMessage(st.UserID, makeSummary(ctx, distribs, conflicts, rep.Xdr))
-				msg.ReplyMarkup = reportResultButtons
+				msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+					tgbotapi.NewKeyboardButtonRow(
+						tgbotapi.NewKeyboardButton(fmt.Sprintf("%s_%d", eventReportSubmit, rep.ID)),
+					),
+				)
 				msg.ParseMode = "HTML"
+				if _, err := t.bot.Send(msg); err != nil {
+					e.Cancel(err)
+				}
+			},
+			eventReportSubmit: func(ctx context.Context, e *fsm.Event) {
+				st := e.Args[0].(db.State)
+				idStr := e.Args[1].(string)
+				id, err := strconv.ParseInt(idStr, 10, 64)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				rep, err := t.q.GetReport(ctx, id)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				hash, err := t.stellar.SubmitXDR(ctx, t.cfg.Seed, rep.Xdr)
+				if err != nil {
+					e.Cancel(err)
+					return
+				}
+
+				msg := tgbotapi.NewMessage(st.UserID, fmt.Sprintf("Transaction submitted: %s", hash))
+				msg.ReplyMarkup = startButtons
 				if _, err := t.bot.Send(msg); err != nil {
 					e.Cancel(err)
 				}

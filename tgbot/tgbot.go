@@ -6,18 +6,22 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/Montelibero/mlm/config"
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
+	"github.com/Montelibero/mlm/stellar"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/looplab/fsm"
 )
 
 type TGBot struct {
+	cfg     *config.Config
 	l       *slog.Logger
 	q       *db.Queries
 	bot     *tgbotapi.BotAPI
 	distrib *distributor.Distributor
+	stellar *stellar.Client
 }
 
 func (t *TGBot) Run(ctx context.Context) {
@@ -52,6 +56,10 @@ func (t *TGBot) Run(ctx context.Context) {
 
 func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 	if !upd.Message.Chat.IsPrivate() || !upd.Message.IsCommand() {
+		return nil
+	}
+
+	if _, ok := t.cfg.AllowedUserIDs[upd.Message.From.ID]; !ok {
 		return nil
 	}
 
@@ -92,6 +100,7 @@ func (t *TGBot) handle(ctx context.Context, upd tgbotapi.Update) error {
 var eventsWithArgs = []string{
 	eventReportResult,
 	eventReportDelete,
+	eventReportSubmit,
 }
 
 func prepareEventAndArgs(text string, args ...interface{}) (string, []interface{}) {
@@ -109,15 +118,19 @@ func prepareEventAndArgs(text string, args ...interface{}) (string, []interface{
 }
 
 func New(
+	cfg *config.Config,
 	l *slog.Logger,
 	q *db.Queries,
 	bot *tgbotapi.BotAPI,
 	distrib *distributor.Distributor,
+	stellar *stellar.Client,
 ) *TGBot {
 	return &TGBot{
+		cfg:     cfg,
 		l:       l,
 		q:       q,
 		bot:     bot,
 		distrib: distrib,
+		stellar: stellar,
 	}
 }
