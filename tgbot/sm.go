@@ -110,7 +110,11 @@ func (t *TGBot) newSM() *fsm.FSM {
 					res.Conflicts,
 					res.XDR,
 				))
-				msg.ReplyMarkup = reportResultButtons
+				msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+					tgbotapi.NewKeyboardButtonRow(
+						tgbotapi.NewKeyboardButton(fmt.Sprintf("%s_%d", eventReportSubmit, res.ReportID)),
+					),
+				)
 				msg.ParseMode = "HTML"
 				if _, err := t.bot.Send(msg); err != nil {
 					e.Cancel(err)

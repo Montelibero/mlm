@@ -57,7 +57,8 @@ func (d *Distributor) Distribute(ctx context.Context) (*mlm.DistributeResult, er
 		return nil, err
 	}
 
-	if err := d.createReport(ctx, res); err != nil {
+	res.ReportID, err = d.createReport(ctx, res)
+	if err != nil {
 		return nil, err
 	}
 
@@ -196,10 +197,10 @@ func (d *Distributor) getXDR(ctx context.Context, distributes []db.ReportDistrib
 	return xdr, err
 }
 
-func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResult) error {
+func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResult) (int64, error) {
 	tx, err := d.pg.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -207,7 +208,7 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 
 	reportID, err := qtx.CreateReport(ctx, res.XDR)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	for _, recommend := range res.Recommends {
@@ -217,7 +218,7 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 			Recommended:      recommend.Recommended,
 			RecommendedMtlap: recommend.RecommendedMtlap,
 		}); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
@@ -228,7 +229,7 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 			Asset:       distrib.Asset,
 			Amount:      distrib.Amount,
 		}); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
@@ -238,11 +239,11 @@ func (d *Distributor) createReport(ctx context.Context, res *mlm.DistributeResul
 			Recommender: conflict.Recommender,
 			Recommended: conflict.Recommended,
 		}); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
-	return tx.Commit(ctx)
+	return reportID, tx.Commit(ctx)
 }
 
 func New(

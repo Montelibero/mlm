@@ -14,6 +14,7 @@ type Config struct {
 	TelegramToken  string
 	Address        string
 	Seed           string
+	Submit         bool
 }
 
 func Get() *Config {
@@ -35,6 +36,7 @@ func Get() *Config {
 		TelegramToken:  os.Getenv("TELEGRAM_TOKEN"),
 		Address:        os.Getenv("STELLAR_ADDRESS"),
 		Seed:           os.Getenv("STELLAR_SEED"),
+		Submit:         os.Getenv("SUBMIT") == "true",
 		AllowedUserIDs: allowedUserIDs,
 	}
 }

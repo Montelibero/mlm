@@ -39,6 +39,7 @@ type HorizonClient interface {
 }
 
 type DistributeResult struct {
+	ReportID    int64
 	XDR         string
 	Conflicts   []db.ReportConflict
 	Recommends  []db.ReportRecommend
