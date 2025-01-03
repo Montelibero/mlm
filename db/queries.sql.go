@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createReport = `-- name: CreateReport :one
@@ -115,7 +117,7 @@ func (q *Queries) DeleteReport(ctx context.Context, id int64) error {
 }
 
 const getReport = `-- name: GetReport :one
-SELECT id, created_at, deleted_at, xdr FROM reports
+SELECT id, created_at, deleted_at, xdr, hash, updated_at FROM reports
 WHERE deleted_at IS NULL AND
   id = $1
 `
@@ -128,6 +130,8 @@ func (q *Queries) GetReport(ctx context.Context, id int64) (Report, error) {
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.Xdr,
+		&i.Hash,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -218,7 +222,7 @@ func (q *Queries) GetReportRecommends(ctx context.Context, reportID int64) ([]Re
 }
 
 const getReports = `-- name: GetReports :many
-SELECT id, created_at, deleted_at, xdr FROM reports
+SELECT id, created_at, deleted_at, xdr, hash, updated_at FROM reports
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT nullif($1::int, 0)
@@ -238,6 +242,8 @@ func (q *Queries) GetReports(ctx context.Context, queryLimit int32) ([]Report, e
 			&i.CreatedAt,
 			&i.DeletedAt,
 			&i.Xdr,
+			&i.Hash,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -275,6 +281,23 @@ SELECT pg_advisory_lock(1)
 
 func (q *Queries) LockReport(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, lockReport)
+	return err
+}
+
+const setReportHash = `-- name: SetReportHash :exec
+UPDATE reports
+SET hash = $1,
+  updated_at = now()
+WHERE id = $2
+`
+
+type SetReportHashParams struct {
+	Hash     pgtype.Text
+	ReportID int64
+}
+
+func (q *Queries) SetReportHash(ctx context.Context, arg SetReportHashParams) error {
+	_, err := q.db.Exec(ctx, setReportHash, arg.Hash, arg.ReportID)
 	return err
 }
 

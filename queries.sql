@@ -28,6 +28,12 @@ UPDATE reports
 SET deleted_at = now()
 WHERE id = @id;
 
+-- name: SetReportHash :exec
+UPDATE reports
+SET hash = @hash,
+  updated_at = now()
+WHERE id = @report_id;
+
 -- name: GetReportRecommends :many
 SELECT * FROM report_recommends
 WHERE report_id = @report_id;

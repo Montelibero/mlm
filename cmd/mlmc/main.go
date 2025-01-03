@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -60,17 +61,30 @@ func main() {
 		slog.Int("recommends", len(res.Recommends)),
 	)
 
-	tgbot, err := bot.New(cfg.TelegramToken)
+	b, err := bot.New(cfg.TelegramToken)
 	if err != nil {
 		l.ErrorContext(ctx, err.Error())
 		os.Exit(1)
 	}
 
-	_, err = tgbot.SendMessage(ctx, &bot.SendMessageParams{
+	replyMarkup := models.ReplyMarkup(nil)
+
+	if res.XDR != "" && !cfg.Submit {
+		replyMarkup = &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{
+				{
+					{Text: "Отправить транзакцию", CallbackData: fmt.Sprintf("submit_xdr_%d", res.ReportID)},
+				},
+			},
+		}
+	}
+
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 		Text:            report.FromDistributeResult(*res),
 		ChatID:          cfg.ReportToChatID,
 		MessageThreadID: int(cfg.ReportToMessageThreadID),
 		ParseMode:       models.ParseModeHTML,
+		ReplyMarkup:     replyMarkup,
 	})
 	if err != nil {
 		l.ErrorContext(ctx, err.Error(),
