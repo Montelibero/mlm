@@ -9,7 +9,10 @@ import (
 	"github.com/Montelibero/mlm/config"
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
+	"github.com/Montelibero/mlm/report"
 	"github.com/Montelibero/mlm/stellar"
+	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/stellar/go/clients/horizonclient"
 )
@@ -39,7 +42,7 @@ func main() {
 
 	distribOpts := []mlm.DistributeOption{}
 
-	if cfg.WithourReport {
+	if cfg.WithoutReport {
 		distribOpts = append(distribOpts, mlm.WithoutReport())
 	}
 
@@ -56,6 +59,26 @@ func main() {
 		slog.Int("distributes", len(res.Distributes)),
 		slog.Int("recommends", len(res.Recommends)),
 	)
+
+	tgbot, err := bot.New(cfg.TelegramToken)
+	if err != nil {
+		l.ErrorContext(ctx, err.Error())
+		os.Exit(1)
+	}
+
+	_, err = tgbot.SendMessage(ctx, &bot.SendMessageParams{
+		Text:            report.FromDistributeResult(*res),
+		ChatID:          cfg.ReportToChatID,
+		MessageThreadID: int(cfg.ReportToMessageThreadID),
+		ParseMode:       models.ParseModeHTML,
+	})
+	if err != nil {
+		l.ErrorContext(ctx, err.Error(),
+			slog.Int64("chat_id", cfg.ReportToChatID),
+			slog.Int64("message_thread_id", cfg.ReportToMessageThreadID),
+		)
+		os.Exit(1)
+	}
 
 	if !cfg.Submit {
 		return

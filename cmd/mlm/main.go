@@ -12,8 +12,6 @@ import (
 	"github.com/Montelibero/mlm/db"
 	"github.com/Montelibero/mlm/distributor"
 	"github.com/Montelibero/mlm/stellar"
-	"github.com/Montelibero/mlm/tgbot"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -62,13 +60,5 @@ func main() {
 	stell := stellar.NewClient(cl)
 	distrib := distributor.New(cfg, stell, q, pg)
 
-	bot, err := tgbotapi.NewBotAPI(cfg.TelegramToken)
-	if err != nil {
-		l.ErrorContext(ctx, err.Error())
-		os.Exit(1)
-	}
-
-	tgbot := tgbot.New(cfg, l, q, bot, distrib, stell)
-
-	tgbot.Run(ctx) // blocks
+	_ = distrib
 }
