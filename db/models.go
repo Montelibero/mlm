@@ -13,6 +13,8 @@ type Report struct {
 	CreatedAt pgtype.Timestamptz
 	DeletedAt pgtype.Timestamptz
 	Xdr       string
+	Hash      pgtype.Text
+	UpdatedAt pgtype.Timestamptz
 }
 
 type ReportConflict struct {

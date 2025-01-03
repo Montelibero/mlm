@@ -22,6 +22,7 @@ type Querier interface {
 	GetReports(ctx context.Context, queryLimit int32) ([]Report, error)
 	GetState(ctx context.Context, userID int64) (State, error)
 	LockReport(ctx context.Context) error
+	SetReportHash(ctx context.Context, arg SetReportHashParams) error
 	UnlockReport(ctx context.Context) error
 }
 
