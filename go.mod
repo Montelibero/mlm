@@ -4,10 +4,9 @@ go 1.22
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/go-telegram/bot v1.12.1
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/joho/godotenv v1.5.1
-	github.com/looplab/fsm v1.0.2
 	github.com/pressly/goose/v3 v3.23.0
 	github.com/samber/lo v1.47.0
 	github.com/stellar/go v0.0.0-20241105223651-39a8d368086a

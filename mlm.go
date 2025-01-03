@@ -3,6 +3,7 @@ package mlm
 import (
 	"context"
 	"embed"
+	"time"
 
 	"github.com/Montelibero/mlm/db"
 	"github.com/stellar/go/clients/horizonclient"
@@ -39,11 +40,16 @@ type HorizonClient interface {
 }
 
 type DistributeResult struct {
-	ReportID    int64
-	XDR         string
-	Conflicts   []db.ReportConflict
-	Recommends  []db.ReportRecommend
-	Distributes []db.ReportDistribute
+	CreatedAt               time.Time
+	XDR                     string
+	Conflicts               []db.ReportConflict
+	Recommends              []db.ReportRecommend
+	Distributes             []db.ReportDistribute
+	ReportID                int64
+	Amount                  float64
+	AmountPerTag            float64
+	RecommendedNewCount     int64
+	RecommendedLevelUpCount int64
 }
 
 type DistributeOptions struct {

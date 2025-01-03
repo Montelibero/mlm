@@ -53,18 +53,18 @@ func (d *Distributor) Distribute(ctx context.Context, opts ...mlm.DistributeOpti
 		return nil, err
 	}
 
-	res, err := d.calcuateParts(ctx, lastDistribute, distributeAmount, recs)
-	if err != nil {
-		return nil, err
-	}
-
-	res.XDR, err = d.getXDR(ctx, res.Distributes)
+	res, err := d.calcuateParts(lastDistribute, distributeAmount, recs)
 	if err != nil {
 		return nil, err
 	}
 
 	if opt.WithoutReport {
 		return res, nil
+	}
+
+	res.XDR, err = d.getXDR(ctx, res.Distributes)
+	if err != nil {
+		return nil, err
 	}
 
 	res.ReportID, err = d.createReport(ctx, res)
@@ -120,17 +120,18 @@ func (d *Distributor) getDistributeAmount(ctx context.Context) (float64, error) 
 }
 
 func (d *Distributor) calcuateParts(
-	ctx context.Context,
 	lastDistribute map[string]map[string]int64,
 	distributeAmount float64,
 	recs *mlm.RecommendersFetchResult,
 ) (*mlm.DistributeResult, error) {
 	res := &mlm.DistributeResult{
-		Conflicts:   make([]db.ReportConflict, 0),
-		Recommends:  make([]db.ReportRecommend, 0),
-		Distributes: make([]db.ReportDistribute, 0),
+		Conflicts:    make([]db.ReportConflict, 0),
+		Recommends:   make([]db.ReportRecommend, 0),
+		Distributes:  make([]db.ReportDistribute, 0),
+		CreatedAt:    time.Now(),
+		Amount:       distributeAmount,
+		AmountPerTag: distributeAmount / float64(recs.TotalRecommendedMTLAP),
 	}
-	part := distributeAmount / float64(recs.TotalRecommendedMTLAP)
 
 	for recommended, recommenders := range recs.Conflict {
 		for _, recoomender := range recommenders {
@@ -149,9 +150,13 @@ func (d *Distributor) calcuateParts(
 				continue
 			}
 
-			lastMTLAP, _ := lastDistribute[recommender.AccountID][recommended.AccountID]
-			if lastMTLAP < recommended.MTLAP { // dynamics
+			lastMTLAP, ok := lastDistribute[recommender.AccountID][recommended.AccountID]
+			if !ok {
+				res.RecommendedNewCount++
+			}
+			if lastMTLAP < recommended.MTLAP {
 				partCount += recommended.MTLAP - lastMTLAP
+				res.RecommendedLevelUpCount++
 			}
 
 			res.Recommends = append(res.Recommends, db.ReportRecommend{
@@ -164,7 +169,7 @@ func (d *Distributor) calcuateParts(
 		res.Distributes = append(res.Distributes, db.ReportDistribute{
 			Recommender: recommender.AccountID,
 			Asset:       stellar.EURMTLAsset,
-			Amount:      math.Floor(float64(partCount)*part*10000000) / 10000000,
+			Amount:      math.Floor(float64(partCount)*res.AmountPerTag*10000000) / 10000000,
 		})
 	}
 
