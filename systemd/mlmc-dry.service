@@ -1,0 +1,8 @@
+[Unit]
+Description=Run mlmc dry report
+After=postgresql.target
+[Service]
+Type=oneshot
+User=mlm
+ExecStart=/usr/bin/env /usr/local/bin/mlmc
+EnvironmentFile=-/etc/mlm/dry.env

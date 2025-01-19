@@ -1,0 +1,13 @@
+[Unit]
+Description=Montelibero MLM bot.
+After=postgresql.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=mlm
+ExecStart=/usr/bin/env /usr/local/bin/mlm
+EnvironmentFile=-/etc/mlm/env
+[Install]
+WantedBy=multi-user.target
