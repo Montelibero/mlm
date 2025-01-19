@@ -53,7 +53,7 @@ func (d *Distributor) Distribute(ctx context.Context, opts ...mlm.DistributeOpti
 		return nil, err
 	}
 
-	res, err := d.calcuateParts(lastDistribute, distributeAmount, recs)
+	res, err := d.CalculateParts(lastDistribute, distributeAmount, recs)
 	if err != nil {
 		return nil, err
 	}
@@ -119,18 +119,41 @@ func (d *Distributor) getDistributeAmount(ctx context.Context) (float64, error) 
 	return bal / 3 * 10000000 / 10000000, nil
 }
 
-func (d *Distributor) calcuateParts(
+func (d *Distributor) CalculateParts(
 	lastDistribute map[string]map[string]int64,
 	distributeAmount float64,
 	recs *mlm.RecommendersFetchResult,
 ) (*mlm.DistributeResult, error) {
 	res := &mlm.DistributeResult{
-		Conflicts:    make([]db.ReportConflict, 0),
-		Recommends:   make([]db.ReportRecommend, 0),
-		Distributes:  make([]db.ReportDistribute, 0),
-		CreatedAt:    time.Now(),
-		Amount:       distributeAmount,
-		AmountPerTag: distributeAmount / float64(recs.TotalRecommendedMTLAP),
+		Conflicts:   make([]db.ReportConflict, 0),
+		Recommends:  make([]db.ReportRecommend, 0),
+		Distributes: make([]db.ReportDistribute, 0),
+		CreatedAt:   time.Now(),
+		Amount:      distributeAmount,
+	}
+
+	// Сначала посчитаем общее количество новых/измененных MTLAP
+	totalNewMTLAP := int64(0)
+
+	for _, recommender := range recs.Recommenders {
+		for _, recommended := range recommender.Recommended {
+			if _, ok := recs.Conflict[recommended.AccountID]; ok {
+				continue
+			}
+
+			lastMTLAP, ok := lastDistribute[recommender.AccountID][recommended.AccountID]
+			if !ok {
+				totalNewMTLAP += recommended.MTLAP
+				continue
+			}
+			if lastMTLAP < recommended.MTLAP {
+				totalNewMTLAP += recommended.MTLAP - lastMTLAP
+			}
+		}
+	}
+
+	if totalNewMTLAP > 0 {
+		res.AmountPerTag = distributeAmount / float64(totalNewMTLAP)
 	}
 
 	for recommended, recommenders := range recs.Conflict {
