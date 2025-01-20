@@ -91,6 +91,33 @@ func TestCalculateParts(t *testing.T) {
 				RecommendedLevelUpCount: 1,
 			},
 		},
+		{
+			name: "игнорирование нулевых сумм",
+			lastDistribute: map[string]map[string]int64{
+				"rec1": {
+					"user1": 10,
+					"user2": 20,
+				},
+			},
+			distributeAmount: 100,
+			recs: &mlm.RecommendersFetchResult{
+				Recommenders: []mlm.Recommender{
+					{
+						AccountID: "rec1",
+						Recommended: []mlm.Recommended{
+							{AccountID: "user1", MTLAP: 10}, // нет изменений
+							{AccountID: "user2", MTLAP: 20}, // нет изменений
+						},
+					},
+				},
+				Conflict: map[string][]string{},
+			},
+			want: &mlm.DistributeResult{
+				AmountPerTag:            0,
+				RecommendedNewCount:     0,
+				RecommendedLevelUpCount: 0,
+			},
+		},
 	}
 
 	for _, tt := range tests {

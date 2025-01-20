@@ -189,11 +189,14 @@ func (d *Distributor) CalculateParts(
 			})
 		}
 
-		res.Distributes = append(res.Distributes, db.ReportDistribute{
-			Recommender: recommender.AccountID,
-			Asset:       stellar.EURMTLAsset,
-			Amount:      math.Floor(float64(partCount)*res.AmountPerTag*10000000) / 10000000,
-		})
+		amount := math.Floor(float64(partCount)*res.AmountPerTag*10000000) / 10000000
+		if amount > 0 {
+			res.Distributes = append(res.Distributes, db.ReportDistribute{
+				Recommender: recommender.AccountID,
+				Asset:       stellar.EURMTLAsset,
+				Amount:      amount,
+			})
+		}
 	}
 
 	return res, nil
