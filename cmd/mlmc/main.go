@@ -183,6 +183,10 @@ func (a *app) distribute(ctx context.Context, cmd *cli.Command) error {
 
 		res, err = a.distrib.Distribute(ctx)
 		if err != nil {
+			if errors.Is(err, distributor.ErrNoDistributes) {
+				a.log.InfoContext(ctx, "nothing to distribute, skipping")
+				return nil
+			}
 			return err
 		}
 	}
